@@ -35,36 +35,48 @@ def load_data():
     wiki['wikipedia'] = wiki['wikipedia'].apply(lambda link: f'<a target="_blank" href="{link}">wiki url</a>')
     
     popular_df = popular_df.merge(wiki, on="user_id",how="left")
+    pr_df = pd.read_csv("https://www.dropbox.com/s/rvkaqcajpit0766/pmi_random_political.csv.gz?dl=1", compression="gzip")
     
-    return popular_df
+    uncivil_df = pd.read_csv("https://www.dropbox.com/s/1xfevw3d99dgupd/pmi_political_uncivil.csv.gz?dl=1", compression="gzip")
+    
+    return popular_df, pr_df ,uncivil_df
 
 st.set_page_config(layout="wide")
 
-popular_df = load_data()
+popular_df, pr_df, uncivil_df = load_data()
 
 
-for path, subdirs, files in os.walk("data"):
-    for file in files:
-        if file.endswith(".csv"):
-            file_list.append(file)
+# for path, subdirs, files in os.walk("data"):
+#     for file in files:
+#         if file.endswith(".csv"):
+#             file_list.append(file)
 
 
-selected_file = st.selectbox("select file", file_list)
+selected_file = st.selectbox("select file", ["popular vs random", "random vs uncivil"])
 
-df = pd.read_csv(os.path.join("data", selected_file))
-cic_filter = st.slider("Filter users that appear less than:", 1, 30)
-sort_pmi = st.selectbox("Sort PMI by:",['Accending','Decending'])
+if selected_file == "popular vs random":
+    df = pr_df.copy() 
+else:
+    df = uncivil_df.copy()
+st_col1, st_col2, st_col3 = st.columns(3)
+cic_filter = st_col2.slider("Filter users that appear less than:", 20, 100)
+sort_pmi = st_col1.selectbox("Sort PMI by:",['Accending','Decending'])
+specific_user = st_col3.text_input("Search for a specific user:" ,key =1)
 
-df.user2 = df.user2.astype(int)
+
 df.count_in_class = df.count_in_class.astype(int)
 df.drop(df.columns[df.columns.str.contains(
     'unnamed', case=False)], axis=1, inplace=True)
 df.rename(columns={'user2': 'user_id'}, inplace=True)
 
+df.sort_values(by=['pmi'], ascending=True, inplace=True)
+
 merged_df = pd.merge(df, popular_df, on="user_id", how="left")
 
-merged_df = merged_df[['category', 'pmi',
+merged_df = merged_df[['pmi','class',
         'count_in_class',
+        'other_class',
+        'count_in_other_class',
         'user_id',
         'name',
         'screen_name',
@@ -74,16 +86,28 @@ merged_df = merged_df[['category', 'pmi',
         'wikipedia'
         ]]
 
-
 merged_df.drop_duplicates(inplace=True)
 
 merged_df = merged_df[merged_df['count_in_class'] >= cic_filter]
 #df = 
-if sort_pmi == "Accending":
-    merged_df.sort_values(by=['pmi'], ascending=True, inplace=True)
+
+placeholder_2 = st.empty()
+
+if specific_user != "":
+    with placeholder_2.form(key = 'my_form', clear_on_submit = False):
+        st.write(f"Selected user: {specific_user}")
+        st.write(merged_df[merged_df['screen_name']==specific_user])
+        submit_button = st.form_submit_button(label = 'clear selection')	
+        if submit_button:
+            placeholder_2.empty()
+
+elif sort_pmi == "Accending":
+    #merged_df.sort_values(by=['pmi'], ascending=True, inplace=True)
+    st.write(merged_df.head(50).to_html(escape=False, index=False), unsafe_allow_html=True)
 else:
-    merged_df.sort_values(by='pmi', ascending=False, inplace=True)
+    st.write(merged_df.tail(50).to_html(escape=False, index=False), unsafe_allow_html=True)
+    #merged_df.sort_values(by='pmi', ascending=False, inplace=True)
 #st.write(df.to_html(escape=False)
-st.write(merged_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+
 
 # st.dataframe(popular_df)
